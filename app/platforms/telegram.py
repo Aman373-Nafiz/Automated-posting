@@ -1,61 +1,43 @@
-"""Telegraph (telegra.ph) - https://telegra.ph/api"""
-
-import json
+"""Telegram Bot API - https://core.telegram.org/bots/api#sendmessage"""
 
 import httpx
 
 from app.config import Settings
-from app.platforms.base import BasePlatform, PlatformError, PostOutcome, build_title
+from app.platforms.base import BasePlatform, PlatformError, PostOutcome
 
 
-class TelegraphPlatform(BasePlatform):
-    name = "Telegraph"
-    api_url = "https://api.telegra.ph"
+class TelegramPlatform(BasePlatform):
+    name = "Telegram"
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        # Reused across requests; created on first use when not configured.
-        self._token: str | None = settings.telegraph_access_token or None
 
-    async def _ensure_token(self, client: httpx.AsyncClient) -> str:
-        if self._token:
-            return self._token
-        response = await client.post(
-            f"{self.api_url}/createAccount",
-            data={"short_name": "autoposter", "author_name": "Auto Poster"},
+    def missing_credentials(self) -> list[str]:
+        return self._missing(
+            TELEGRAM_BOT_TOKEN=self.settings.telegram_bot_token,
+            TELEGRAM_CHANNEL=self.settings.telegram_channel,
         )
-        self._token = self._result(response, "createAccount")["access_token"]
-        return self._token
-
-    def _result(self, response: httpx.Response, action: str) -> dict:
-        # Telegraph answers HTTP 200 even on errors: {"ok": false, "error": "..."}
-        data = self.parse_json(response, action)
-        if not data.get("ok"):
-            raise PlatformError(f"{action}: {data.get('error', 'unknown error')}")
-        return data["result"]
 
     async def post(self, client: httpx.AsyncClient, message: str, link: str) -> PostOutcome:
-        token = await self._ensure_token(client)
-
-        before, _, after = message.partition(link)
-        children = [
-            part
-            for part in (
-                before,
-                {"tag": "a", "attrs": {"href": link}, "children": [link]},
-                after,
-            )
-            if part != ""
-        ]
-        content = [{"tag": "p", "children": children}]
-
         response = await client.post(
-            f"{self.api_url}/createPage",
-            data={
-                "access_token": token,
-                "title": build_title(message, link),
-                "content": json.dumps(content),
-            },
+            f"https://api.telegram.org/bot{self.settings.telegram_bot_token}/sendMessage",
+            json={"chat_id": self.settings.telegram_channel, "text": message},
         )
-        page = self._result(response, "createPage")
-        return PostOutcome(url=page["url"], public_access=True)
+        # Telegram reports errors as {"ok": false, "description": "..."}
+        data = self.parse_json(response, "sendMessage")
+        if not data.get("ok"):
+            raise PlatformError(f"sendMessage: {data.get('description', 'unknown error')}")
+
+        result = data["result"]
+        message_id = result["message_id"]
+        chat = result.get("chat", {})
+
+        if chat.get("username"):  # public channel -> https://t.me/<name>/<id>
+            return PostOutcome(
+                url=f"https://t.me/{chat['username']}/{message_id}", public_access=True
+            )
+        # Private channel: link only works for members.
+        internal_id = str(chat.get("id", "")).removeprefix("-100")
+        return PostOutcome(
+            url=f"https://t.me/c/{internal_id}/{message_id}", public_access=False
+        )
