@@ -140,4 +140,22 @@ internet and no credentials.
 - **HTTP status**: `200` for any valid request (inspect `success` / `results`), `422` for invalid input.
 
 ## Screenshots / logs
-Add your own screenshots of `/docs` and a real run to `docs/screenshots/`.
+A## Screenshots
+
+### Swagger UI
+![Swagger docs](docs/screenshots/img.png)
+
+### Successful request to multiple platforms
+![Success response](docs/screenshots/img_1.png)
+
+### Validation error (HTTP 422)
+![Validation error](docs/screenshots/img_3.png)
+
+### Tests passing
+![Tests](docs/screenshots/img_4.png)
+
+## Sample files
+- Request: [`docs/samples/request.json`](docs/samples/request.json)
+- Successful response: [`docs/samples/response.json`](docs/samples/response.json)
+- Validation error: [`docs/samples/error-422.json`](docs/samples/error-422.json)
+- Server log: [`docs/samples/server-log.txt`](docs/samples/server-log.txt)
